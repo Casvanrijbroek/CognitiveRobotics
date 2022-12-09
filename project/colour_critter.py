@@ -15,8 +15,8 @@ mymap="""
 """
 mymap="""
 #########
-#RR   YY#
-#R#####Y#
+#GG   YY#
+#G#####Y#
 # ##### #
 # ##### #
 # ##### #
@@ -181,15 +181,15 @@ with model:
     #nengo.Connection(choose_movement, movement, function=movement_func)
     
     # Simple ensemble to represent the observed color
-    col_ens = nengo.Ensemble(n_neurons=500, dimensions=3, radius=4)
+    col_ens = nengo.Ensemble(n_neurons=500, dimensions=3, radius=1)
     nengo.Connection(current_color, col_ens)
     
     D = 128
     
     rgb_vocab = spa.Vocabulary(D)
-    rgb_vocab.parse("RED+GREEN+BLUE")
+    rgb_vocab.parse("BLUE+GREEN+RED")
     col_vocab = spa.Vocabulary(D)
-    col_vocab.parse("WHITE+RED+BLUE+GREEN+YELLOW+MAGENTA")
+    col_vocab.parse("BLUE+GREEN+RED+MAGENTA+YELLOW+WHITE")
     
     model.color = spa.State(D, vocab=col_vocab)
         
@@ -209,8 +209,11 @@ with model:
         "dot(spa_col, GREEN) --> color=GREEN",
         "0.55*(dot(spa_col, RED) + dot(spa_col, GREEN)) --> color=YELLOW",
         "0.55*(dot(spa_col, RED) + dot(spa_col, BLUE)) --> color=MAGENTA",
-        "0.5 --> color=0"
+        "0.5 --> color=0",
     )
+    
+    model.cleanup = spa.AssociativeMemory(input_vocab=col_vocab, wta_output=True)
+    nengo.Connection(model.color.output, model.cleanup.am.input)
     
     model.bg = spa.BasalGanglia(actions)
     model.thalamus = spa.Thalamus(model.bg)
