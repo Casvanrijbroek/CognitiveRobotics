@@ -13,6 +13,17 @@ mymap="""
 #G Y R#
 #######
 """
+mymap="""
+#########
+#RR   YY#
+#R#####Y#
+# ##### #
+# ##### #
+# ##### #
+#M#####B#
+#MM   BB#
+#########
+"""
 
 
 #### Preliminaries - this sets up the agent and the environment ################ 
@@ -160,11 +171,52 @@ with model:
     #the movement function is only driven by information from the radar, so we
     #can connect the radar ensemble to the output node with this function 
     #directly. In the assignment, you will need intermediate steps
-    nengo.Connection(walldist, movement, function=movement_func)  
+    nengo.Connection(walldist, movement, function=movement_func)
+    
+    # Try to create an extra identity connection (this greatly changes the behaviour)
+    # Potentially troublesome for basing my decisions on multiple factors later
+    # I should find a way to stabilize this
+    #choose_movement = nengo.Ensemble(n_neurons=500, dimensions=3, radius=4)
+    #nengo.Connection(walldist, choose_movement)
+    #nengo.Connection(choose_movement, movement, function=movement_func)
+    
+    # Simple ensemble to represent the observed color
+    col_ens = nengo.Ensemble(n_neurons=500, dimensions=3, radius=4)
+    nengo.Connection(current_color, col_ens)
+    
+    D = 128
+    
+    rgb_vocab = spa.Vocabulary(D)
+    rgb_vocab.parse("RED+GREEN+BLUE")
+    col_vocab = spa.Vocabulary(D)
+    col_vocab.parse("WHITE+RED+BLUE+GREEN+YELLOW+MAGENTA")
+    
+    model.color = spa.State(D, vocab=col_vocab)
+        
+    model.spa_col = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(col_ens[0], model.spa_col.input, 
+        transform=rgb_vocab["RED"].v.reshape(D, 1))
+    nengo.Connection(col_ens[1], model.spa_col.input, 
+        transform=rgb_vocab["GREEN"].v.reshape(D, 1))
+    nengo.Connection(col_ens[2], model.spa_col.input, 
+        transform=rgb_vocab["BLUE"].v.reshape(D, 1))
+    
+    # "0.45*(dot(spa_col, RED) + dot(spa_col, GREEN) + dot(spa_col, BLUE)) --> color=WHITE",
+    actions = spa.Actions(
+        "0.45*(dot(spa_col, RED) + dot(spa_col, GREEN) + dot(spa_col, BLUE)) --> color=WHITE",
+        "dot(spa_col, RED) --> color=RED",
+        "dot(spa_col, BLUE) --> color=BLUE",
+        "dot(spa_col, GREEN) --> color=GREEN",
+        "0.55*(dot(spa_col, RED) + dot(spa_col, GREEN)) --> color=YELLOW",
+        "0.55*(dot(spa_col, RED) + dot(spa_col, BLUE)) --> color=MAGENTA",
+        "0.5 --> color=0"
+    )
+    
+    model.bg = spa.BasalGanglia(actions)
+    model.thalamus = spa.Thalamus(model.bg)
 
 
 
-    
-    
-    
+
+
  
