@@ -13,15 +13,15 @@ mymap="""
 #G Y R#
 #######
 """
-mymap="""
+mymap2="""
 #########
-#GG   YY#
-#G#####Y#
+#G     Y#
 # ##### #
 # ##### #
 # ##### #
-#M#####B#
-#MM   BB#
+# ##### #
+# ##### #
+#M  R  B#
 #########
 """
 
@@ -79,7 +79,7 @@ col_values = {
     5: [0.8, 0.8, 0.2], # Yellow
 }
 
-noise_val = 0.1 # how much noise there will be in the colour info
+noise_val = 0.01 # how much noise there will be in the colour info
 
 #You do not have to use spa.SPA; you can also do this entirely with nengo.Network()
 model = spa.SPA()
@@ -181,10 +181,10 @@ with model:
     #nengo.Connection(choose_movement, movement, function=movement_func)
     
     # Simple ensemble to represent the observed color
-    col_ens = nengo.Ensemble(n_neurons=500, dimensions=3, radius=1)
+    col_ens = nengo.Ensemble(n_neurons=500, dimensions=3, radius=1.5)
     nengo.Connection(current_color, col_ens)
     
-    D = 128
+    D = 64
     
     rgb_vocab = spa.Vocabulary(D)
     rgb_vocab.parse("BLUE+GREEN+RED")
@@ -193,27 +193,32 @@ with model:
     
     model.color = spa.State(D, vocab=col_vocab)
         
-    model.spa_col = spa.State(D, vocab=rgb_vocab)
-    nengo.Connection(col_ens[0], model.spa_col.input, 
+    model.spa_red = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(col_ens[0], model.spa_red.input, 
         transform=rgb_vocab["RED"].v.reshape(D, 1))
-    nengo.Connection(col_ens[1], model.spa_col.input, 
+    model.spa_green = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(col_ens[1], model.spa_green.input, 
         transform=rgb_vocab["GREEN"].v.reshape(D, 1))
-    nengo.Connection(col_ens[2], model.spa_col.input, 
+    model.spa_blue = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(col_ens[2], model.spa_blue.input, 
         transform=rgb_vocab["BLUE"].v.reshape(D, 1))
     
-    # "0.45*(dot(spa_col, RED) + dot(spa_col, GREEN) + dot(spa_col, BLUE)) --> color=WHITE",
     actions = spa.Actions(
-        "0.45*(dot(spa_col, RED) + dot(spa_col, GREEN) + dot(spa_col, BLUE)) --> color=WHITE",
-        "dot(spa_col, RED) --> color=RED",
-        "dot(spa_col, BLUE) --> color=BLUE",
-        "dot(spa_col, GREEN) --> color=GREEN",
-        "0.6*(dot(spa_col, RED) + dot(spa_col, GREEN)) --> color=YELLOW",
-        "0.6*(dot(spa_col, RED) + dot(spa_col, BLUE)) --> color=MAGENTA",
-        "0.5 --> color=0",
+        "dot(spa_red, RED) - 0.05*(dot(spa_green, GREEN) - dot(spa_blue, BLUE)) --> color=RED",
+        "dot(spa_blue, BLUE) - 0.05*(dot(spa_green, GREEN) - dot(spa_red, RED)) --> color=BLUE",
+        "dot(spa_green, GREEN) - 0.15*(dot(spa_red, RED) - dot(spa_blue, BLUE)) --> color=GREEN",
+        "0.95*(dot(spa_red, RED) + dot(spa_green, GREEN)) - dot(spa_blue, BLUE) --> color=YELLOW",
+        "0.95*(dot(spa_red, RED) + dot(spa_blue, BLUE)) - dot(spa_green, GREEN) --> color=MAGENTA",
+        "0.8 --> color=0",
     )
     
     model.cleanup = spa.AssociativeMemory(input_vocab=col_vocab, wta_output=True)
     nengo.Connection(model.color.output, model.cleanup.am.input)
+    #nengo.Connection(model.color.output, model.color.input)
+    
+    model.memory = spa.State(D)
+    nengo.Connection(model.cleanup.am.output, model.memory.input)
+    nengo.Connection(model.memory.output, model.memory.input)
     
     model.bg = spa.BasalGanglia(actions)
     model.thalamus = spa.Thalamus(model.bg)
