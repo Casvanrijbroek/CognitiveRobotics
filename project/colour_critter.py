@@ -207,8 +207,8 @@ with model:
         "dot(spa_col, RED) --> color=RED",
         "dot(spa_col, BLUE) --> color=BLUE",
         "dot(spa_col, GREEN) --> color=GREEN",
-        "0.55*(dot(spa_col, RED) + dot(spa_col, GREEN)) --> color=YELLOW",
-        "0.55*(dot(spa_col, RED) + dot(spa_col, BLUE)) --> color=MAGENTA",
+        "0.6*(dot(spa_col, RED) + dot(spa_col, GREEN)) --> color=YELLOW",
+        "0.6*(dot(spa_col, RED) + dot(spa_col, BLUE)) --> color=MAGENTA",
         "0.5 --> color=0",
     )
     
