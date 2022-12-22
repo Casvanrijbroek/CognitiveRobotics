@@ -13,15 +13,15 @@ mymap="""
 #G Y R#
 #######
 """
-mymap2="""
+mymap="""
 #########
-#G     Y#
+#R  G  Y#
 # ##### #
 # ##### #
 # ##### #
 # ##### #
 # ##### #
-#M  R  B#
+#M  G  B#
 #########
 """
 
@@ -184,7 +184,7 @@ with model:
     col_ens = nengo.Ensemble(n_neurons=500, dimensions=3, radius=1.5)
     nengo.Connection(current_color, col_ens)
     
-    D = 64
+    D = 128
     
     rgb_vocab = spa.Vocabulary(D)
     rgb_vocab.parse("BLUE+GREEN+RED")
@@ -206,7 +206,7 @@ with model:
     actions = spa.Actions(
         "dot(spa_red, RED) - 0.05*(dot(spa_green, GREEN) - dot(spa_blue, BLUE)) --> color=RED",
         "dot(spa_blue, BLUE) - 0.05*(dot(spa_green, GREEN) - dot(spa_red, RED)) --> color=BLUE",
-        "dot(spa_green, GREEN) - 0.15*(dot(spa_red, RED) - dot(spa_blue, BLUE)) --> color=GREEN",
+        "dot(spa_green, GREEN) - 0.05*(dot(spa_red, RED) - dot(spa_blue, BLUE)) --> color=GREEN",
         "0.95*(dot(spa_red, RED) + dot(spa_green, GREEN)) - dot(spa_blue, BLUE) --> color=YELLOW",
         "0.95*(dot(spa_red, RED) + dot(spa_blue, BLUE)) - dot(spa_green, GREEN) --> color=MAGENTA",
         "0.8 --> color=0",
