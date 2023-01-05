@@ -15,7 +15,7 @@ mymap="""
 """
 mymap="""
 #########
-#R  G  Y#
+#R  R  Y#
 # ##### #
 # ##### #
 # ##### #
@@ -23,6 +23,15 @@ mymap="""
 # ##### #
 #M  G  B#
 #########
+"""
+mymap2="""
+######
+#    #
+# ## #
+#    #
+# ####
+#M####
+######
 """
 
 
@@ -165,7 +174,7 @@ with model:
     #the distance to the wall ahead, reversing if it is really close
     def movement_func(x):
         turn = x[2] - x[0]
-        spd = x[1] - 0.5
+        spd = (x[1] - 0.5)/2
         return spd, turn
     
     #the movement function is only driven by information from the radar, so we
@@ -189,7 +198,7 @@ with model:
     rgb_vocab = spa.Vocabulary(D)
     rgb_vocab.parse("BLUE+GREEN+RED")
     col_vocab = spa.Vocabulary(D)
-    col_vocab.parse("BLUE+GREEN+RED+MAGENTA+YELLOW+WHITE")
+    col_vocab.parse("BLUE+GREEN+RED+MAGENTA+YELLOW")
     
     model.color = spa.State(D, vocab=col_vocab)
         
@@ -216,9 +225,9 @@ with model:
     nengo.Connection(model.color.output, model.cleanup.am.input)
     #nengo.Connection(model.color.output, model.color.input)
     
-    model.memory = spa.State(D)
+    model.memory = spa.State(D, vocab=col_vocab)
     nengo.Connection(model.cleanup.am.output, model.memory.input)
-    nengo.Connection(model.memory.output, model.memory.input)
+    nengo.Connection(model.memory.output, model.memory.input, transform=3)
     
     model.bg = spa.BasalGanglia(actions)
     model.thalamus = spa.Thalamus(model.bg)
