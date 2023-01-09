@@ -21,7 +21,7 @@ mymap="""
 # ##### #
 # ##### #
 # ##### #
-#M  G  B#
+#M  B  B#
 #########
 """
 mymap2="""
@@ -221,17 +221,24 @@ with model:
         "0.8 --> color=0",
     )
     
-    model.cleanup = spa.AssociativeMemory(input_vocab=col_vocab, wta_output=True)
-    nengo.Connection(model.color.output, model.cleanup.am.input)
+    model.cleanup = spa.AssociativeMemory(input_vocab=col_vocab, 
+                                          wta_output=True)
+    #nengo.Connection(model.color.output, model.cleanup.am.input)
     #nengo.Connection(model.color.output, model.color.input)
-    
-    model.memory = spa.State(D, vocab=col_vocab)
-    nengo.Connection(model.cleanup.am.output, model.memory.input)
-    nengo.Connection(model.memory.output, model.memory.input, transform=3)
     
     model.bg = spa.BasalGanglia(actions)
     model.thalamus = spa.Thalamus(model.bg)
 
+    memory_actions = spa.Actions(
+        "cleanup = color",
+        "memory = SEEN * cleanup",
+        "seen = memory * ~query",
+    )
+    
+    model.memory = spa.State(D, feedback=1)
+    model.seen = spa.State(D)
+    model.query = spa.State(D)
+    model.cortical = spa.Cortical(memory_actions)
 
 
 
