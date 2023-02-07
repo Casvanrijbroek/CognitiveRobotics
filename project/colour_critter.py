@@ -224,16 +224,16 @@ with model:
     obj_w = 0.4
     col_w = 0.8
     mem_w = 2
-    obj_actions = spa.Actions(
-        f"({obj_w}                                                        + {col_w}) * dot(cleanup, {col_sequence[0]}) --> seen_{col_sequence[0].lower()}={mem_w} * {col_sequence[0]}",
-        f"{obj_w} * dot(seen_{col_sequence[0].lower()}, {col_sequence[0]}) + {col_w} * dot(cleanup, {col_sequence[1]}) --> seen_{col_sequence[1].lower()}={mem_w} * {col_sequence[1]}",
-        f"{obj_w} * dot(seen_{col_sequence[1].lower()}, {col_sequence[1]}) + {col_w} * dot(cleanup, {col_sequence[2]}) --> seen_{col_sequence[2].lower()}={mem_w} * {col_sequence[2]}",
-        f"{obj_w} * dot(seen_{col_sequence[2].lower()}, {col_sequence[2]}) + {col_w} * dot(cleanup, {col_sequence[3]}) --> seen_{col_sequence[3].lower()}={mem_w} * {col_sequence[3]}",
-        f"{obj_w} * dot(seen_{col_sequence[3].lower()}, {col_sequence[3]}) + {col_w} * dot(cleanup, {col_sequence[4]}) --> seen_{col_sequence[4].lower()}={mem_w} * {col_sequence[4]}",
+    color_memory_actions = spa.Actions(
+        f"({obj_w}                                                        + {col_w}) * dot(clean_color, {col_sequence[0]}) --> seen_{col_sequence[0].lower()}={mem_w} * {col_sequence[0]}",
+        f"{obj_w} * dot(seen_{col_sequence[0].lower()}, {col_sequence[0]}) + {col_w} * dot(clean_color, {col_sequence[1]}) --> seen_{col_sequence[1].lower()}={mem_w} * {col_sequence[1]}",
+        f"{obj_w} * dot(seen_{col_sequence[1].lower()}, {col_sequence[1]}) + {col_w} * dot(clean_color, {col_sequence[2]}) --> seen_{col_sequence[2].lower()}={mem_w} * {col_sequence[2]}",
+        f"{obj_w} * dot(seen_{col_sequence[2].lower()}, {col_sequence[2]}) + {col_w} * dot(clean_color, {col_sequence[3]}) --> seen_{col_sequence[3].lower()}={mem_w} * {col_sequence[3]}",
+        f"{obj_w} * dot(seen_{col_sequence[3].lower()}, {col_sequence[3]}) + {col_w} * dot(clean_color, {col_sequence[4]}) --> seen_{col_sequence[4].lower()}={mem_w} * {col_sequence[4]}",
         "0.8 --> ",
     )
     
-    actions = spa.Actions(
+    color_recognition_actions = spa.Actions(
         "dot(spa_red, RED) - 0.05*(dot(spa_green, GREEN) - dot(spa_blue, BLUE)) --> color=RED",
         "dot(spa_blue, BLUE) - 0.05*(dot(spa_green, GREEN) - dot(spa_red, RED)) --> color=BLUE",
         "dot(spa_green, GREEN) - 0.05*(dot(spa_red, RED) - dot(spa_blue, BLUE)) --> color=GREEN",
@@ -242,22 +242,22 @@ with model:
         "0.8 --> color=0",
     )
     
-    model.cleanup = spa.AssociativeMemory(input_vocab=col_vocab, 
-                                          wta_output=True)
+    model.clean_color = spa.AssociativeMemory(input_vocab=col_vocab,
+                                              wta_output=True)
     # Elongate the color signal with a weak feedback connection
-    nengo.Connection(model.cleanup.am.output, model.cleanup.am.input, transform=0.5)
+    nengo.Connection(model.clean_color.am.output, model.clean_color.am.input, transform=0.5)
     
-    model.bg = spa.BasalGanglia(actions)
-    model.thalamus = spa.Thalamus(model.bg)
+    model.col_reg_bg = spa.BasalGanglia(color_recognition_actions)
+    model.col_reg_thalamus = spa.Thalamus(model.col_reg_bg)
     
-    model.obj_bg = spa.BasalGanglia(obj_actions)
-    model.obj_thalamus = spa.Thalamus(model.obj_bg)
+    model.col_mem_bg = spa.BasalGanglia(color_memory_actions)
+    model.col_mem_thalamus = spa.Thalamus(model.col_mem_bg)
 
-    memory_actions = spa.Actions(
-        "cleanup = color",
+    cleanup_action = spa.Actions(
+        "clean_color = color",
     )
     
-    model.cortical = spa.Cortical(memory_actions)
+    model.cortical = spa.Cortical(cleanup_action)
 
 
  
