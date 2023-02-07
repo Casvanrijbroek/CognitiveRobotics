@@ -15,13 +15,13 @@ mymap="""
 """
 mymap="""
 #########
-#R  G  Y#
+#R     Y#
 # ##### #
 # ##### #
 # ##### #
 # ##### #
 # ##### #
-#M  B  B#
+#M  G  B#
 #########
 """
 mymap2="""
@@ -220,6 +220,19 @@ with model:
     model.seen_yellow = spa.State(D, vocab=col_vocab, feedback=1)
     model.seen_magenta = spa.State(D, vocab=col_vocab, feedback=1)
     
+    col_sequence = ["MAGENTA", "BLUE", "YELLOW", "GREEN", "RED"]
+    obj_w = 0.4
+    col_w = 0.8
+    mem_w = 2
+    obj_actions = spa.Actions(
+        f"({obj_w}                                                        + {col_w}) * dot(cleanup, {col_sequence[0]}) --> seen_{col_sequence[0].lower()}={mem_w} * {col_sequence[0]}",
+        f"{obj_w} * dot(seen_{col_sequence[0].lower()}, {col_sequence[0]}) + {col_w} * dot(cleanup, {col_sequence[1]}) --> seen_{col_sequence[1].lower()}={mem_w} * {col_sequence[1]}",
+        f"{obj_w} * dot(seen_{col_sequence[1].lower()}, {col_sequence[1]}) + {col_w} * dot(cleanup, {col_sequence[2]}) --> seen_{col_sequence[2].lower()}={mem_w} * {col_sequence[2]}",
+        f"{obj_w} * dot(seen_{col_sequence[2].lower()}, {col_sequence[2]}) + {col_w} * dot(cleanup, {col_sequence[3]}) --> seen_{col_sequence[3].lower()}={mem_w} * {col_sequence[3]}",
+        f"{obj_w} * dot(seen_{col_sequence[3].lower()}, {col_sequence[3]}) + {col_w} * dot(cleanup, {col_sequence[4]}) --> seen_{col_sequence[4].lower()}={mem_w} * {col_sequence[4]}",
+        "0.8 --> ",
+    )
+    
     actions = spa.Actions(
         "dot(spa_red, RED) - 0.05*(dot(spa_green, GREEN) - dot(spa_blue, BLUE)) --> color=RED",
         "dot(spa_blue, BLUE) - 0.05*(dot(spa_green, GREEN) - dot(spa_red, RED)) --> color=BLUE",
@@ -229,25 +242,16 @@ with model:
         "0.8 --> color=0",
     )
     
-    bg_memory_actions = spa.Actions(
-        "dot(cleanup, RED) --> seen_red=RED*10",
-        "dot(cleanup, BLUE) --> seen_blue=BLUE*10",
-        "dot(cleanup, GREEN) --> seen_green=GREEN*10",
-        "dot(cleanup, YELLOW) --> seen_yellow=YELLOW*10",
-        "dot(cleanup, MAGENTA) --> seen_magenta=MAGENTA*10",
-        "0.3 --> ",
-    )
-    
     model.cleanup = spa.AssociativeMemory(input_vocab=col_vocab, 
                                           wta_output=True)
-    #nengo.Connection(model.color.output, model.cleanup.am.input)
-    #nengo.Connection(model.color.output, model.color.input)
+    # Elongate the color signal with a weak feedback connection
+    nengo.Connection(model.cleanup.am.output, model.cleanup.am.input, transform=0.5)
     
     model.bg = spa.BasalGanglia(actions)
     model.thalamus = spa.Thalamus(model.bg)
     
-    model.mem_bg = spa.BasalGanglia(bg_memory_actions)
-    model.mem_thalamus = spa.Thalamus(model.mem_bg)
+    model.obj_bg = spa.BasalGanglia(obj_actions)
+    model.obj_thalamus = spa.Thalamus(model.obj_bg)
 
     memory_actions = spa.Actions(
         "cleanup = color",
