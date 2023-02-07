@@ -15,7 +15,7 @@ mymap="""
 """
 mymap="""
 #########
-#R  R  Y#
+#R  G  Y#
 # ##### #
 # ##### #
 # ##### #
@@ -189,11 +189,13 @@ with model:
     #nengo.Connection(walldist, choose_movement)
     #nengo.Connection(choose_movement, movement, function=movement_func)
     
+    N = 500
+    
     # Simple ensemble to represent the observed color
-    col_ens = nengo.Ensemble(n_neurons=500, dimensions=3, radius=1.5)
+    col_ens = nengo.Ensemble(n_neurons=N, dimensions=3, radius=1.5)
     nengo.Connection(current_color, col_ens)
     
-    D = 128
+    D = 64
     
     rgb_vocab = spa.Vocabulary(D)
     rgb_vocab.parse("BLUE+GREEN+RED")
@@ -211,6 +213,12 @@ with model:
     model.spa_blue = spa.State(D, vocab=rgb_vocab)
     nengo.Connection(col_ens[2], model.spa_blue.input, 
         transform=rgb_vocab["BLUE"].v.reshape(D, 1))
+        
+    model.seen_red = spa.State(D, vocab=col_vocab, feedback=1)
+    model.seen_blue = spa.State(D, vocab=col_vocab, feedback=1)
+    model.seen_green = spa.State(D, vocab=col_vocab, feedback=1)
+    model.seen_yellow = spa.State(D, vocab=col_vocab, feedback=1)
+    model.seen_magenta = spa.State(D, vocab=col_vocab, feedback=1)
     
     actions = spa.Actions(
         "dot(spa_red, RED) - 0.05*(dot(spa_green, GREEN) - dot(spa_blue, BLUE)) --> color=RED",
@@ -221,6 +229,15 @@ with model:
         "0.8 --> color=0",
     )
     
+    bg_memory_actions = spa.Actions(
+        "dot(cleanup, RED) --> seen_red=RED*10",
+        "dot(cleanup, BLUE) --> seen_blue=BLUE*10",
+        "dot(cleanup, GREEN) --> seen_green=GREEN*10",
+        "dot(cleanup, YELLOW) --> seen_yellow=YELLOW*10",
+        "dot(cleanup, MAGENTA) --> seen_magenta=MAGENTA*10",
+        "0.3 --> ",
+    )
+    
     model.cleanup = spa.AssociativeMemory(input_vocab=col_vocab, 
                                           wta_output=True)
     #nengo.Connection(model.color.output, model.cleanup.am.input)
@@ -228,19 +245,15 @@ with model:
     
     model.bg = spa.BasalGanglia(actions)
     model.thalamus = spa.Thalamus(model.bg)
+    
+    model.mem_bg = spa.BasalGanglia(bg_memory_actions)
+    model.mem_thalamus = spa.Thalamus(model.mem_bg)
 
     memory_actions = spa.Actions(
         "cleanup = color",
-        "memory = SEEN * cleanup",
-        "seen = memory * ~query",
     )
     
-    model.memory = spa.State(D, feedback=1)
-    model.seen = spa.State(D)
-    model.query = spa.State(D)
     model.cortical = spa.Cortical(memory_actions)
-
-
 
 
  
