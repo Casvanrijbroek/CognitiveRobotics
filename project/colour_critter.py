@@ -6,14 +6,6 @@ import numpy as np
 
 #we can change the map here using # for walls and RGBMY for various colours
 mymap="""
-#######
-#  M  #
-# # # #
-# #B# #
-#G Y R#
-#######
-"""
-mymap="""
 #########
 #R     Y#
 # ##### #
@@ -24,14 +16,16 @@ mymap="""
 #M  G  B#
 #########
 """
-mymap2="""
-######
-#    #
-# ## #
-#    #
-# ####
-#M####
-######
+mymap="""
+##########
+#R      Y#
+# ## ### #
+# ## ### #
+# ## ### #
+# ## ### #
+# ## ### #
+#M   B  G#
+##########
 """
 
 
@@ -163,10 +157,12 @@ with model:
     ahead_color = nengo.Node(look_ahead)    
     
     ### Agent functionality - your code adds to this section ###################
+    N = 500
+    D = 64
     
     #All input nodes should feed into one ensemble. Here is how to do this for
     #the radar, see if you can do it for the others
-    walldist = nengo.Ensemble(n_neurons=500, dimensions=3, radius=4)
+    walldist = nengo.Ensemble(n_neurons=N, dimensions=3, radius=4)
     nengo.Connection(proximity_sensors, walldist)
 
     #For now, all our agent does is wall avoidance. It uses values of the radar
@@ -189,30 +185,41 @@ with model:
     #nengo.Connection(walldist, choose_movement)
     #nengo.Connection(choose_movement, movement, function=movement_func)
     
-    N = 500
-    
     # Simple ensemble to represent the observed color
-    col_ens = nengo.Ensemble(n_neurons=N, dimensions=3, radius=1.5)
-    nengo.Connection(current_color, col_ens)
+    cur_col_ens = nengo.Ensemble(n_neurons=N, dimensions=3, radius=1.5)
+    nengo.Connection(current_color, cur_col_ens)
     
-    D = 64
+    next_col_ens = nengo.Ensemble(n_neurons=N, dimensions=3, radius=1.5)
+    nengo.Connection(ahead_color, next_col_ens)
     
     rgb_vocab = spa.Vocabulary(D)
     rgb_vocab.parse("BLUE+GREEN+RED")
     col_vocab = spa.Vocabulary(D)
     col_vocab.parse("BLUE+GREEN+RED+MAGENTA+YELLOW")
     
-    model.color = spa.State(D, vocab=col_vocab)
+    model.cur_color = spa.State(D, vocab=col_vocab)
         
-    model.spa_red = spa.State(D, vocab=rgb_vocab)
-    nengo.Connection(col_ens[0], model.spa_red.input, 
-        transform=rgb_vocab["RED"].v.reshape(D, 1))
-    model.spa_green = spa.State(D, vocab=rgb_vocab)
-    nengo.Connection(col_ens[1], model.spa_green.input, 
-        transform=rgb_vocab["GREEN"].v.reshape(D, 1))
-    model.spa_blue = spa.State(D, vocab=rgb_vocab)
-    nengo.Connection(col_ens[2], model.spa_blue.input, 
-        transform=rgb_vocab["BLUE"].v.reshape(D, 1))
+    model.cur_red = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(cur_col_ens[0], model.cur_red.input,
+                     transform=rgb_vocab["RED"].v.reshape(D, 1))
+    model.cur_green = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(cur_col_ens[1], model.cur_green.input,
+                     transform=rgb_vocab["GREEN"].v.reshape(D, 1))
+    model.cur_blue = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(cur_col_ens[2], model.cur_blue.input,
+                     transform=rgb_vocab["BLUE"].v.reshape(D, 1))
+
+    model.next_color = spa.State(D, vocab=col_vocab)
+
+    model.next_red = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(next_col_ens[0], model.next_red.input,
+                     transform=rgb_vocab["RED"].v.reshape(D, 1))
+    model.next_green = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(next_col_ens[1], model.next_green.input,
+                     transform=rgb_vocab["GREEN"].v.reshape(D, 1))
+    model.next_blue = spa.State(D, vocab=rgb_vocab)
+    nengo.Connection(next_col_ens[2], model.next_blue.input,
+                     transform=rgb_vocab["BLUE"].v.reshape(D, 1))
         
     model.seen_red = spa.State(D, vocab=col_vocab, feedback=1)
     model.seen_blue = spa.State(D, vocab=col_vocab, feedback=1)
@@ -225,39 +232,56 @@ with model:
     col_w = 0.8
     mem_w = 2
     color_memory_actions = spa.Actions(
-        f"({obj_w}                                                        + {col_w}) * dot(clean_color, {col_sequence[0]}) --> seen_{col_sequence[0].lower()}={mem_w} * {col_sequence[0]}",
-        f"{obj_w} * dot(seen_{col_sequence[0].lower()}, {col_sequence[0]}) + {col_w} * dot(clean_color, {col_sequence[1]}) --> seen_{col_sequence[1].lower()}={mem_w} * {col_sequence[1]}",
-        f"{obj_w} * dot(seen_{col_sequence[1].lower()}, {col_sequence[1]}) + {col_w} * dot(clean_color, {col_sequence[2]}) --> seen_{col_sequence[2].lower()}={mem_w} * {col_sequence[2]}",
-        f"{obj_w} * dot(seen_{col_sequence[2].lower()}, {col_sequence[2]}) + {col_w} * dot(clean_color, {col_sequence[3]}) --> seen_{col_sequence[3].lower()}={mem_w} * {col_sequence[3]}",
-        f"{obj_w} * dot(seen_{col_sequence[3].lower()}, {col_sequence[3]}) + {col_w} * dot(clean_color, {col_sequence[4]}) --> seen_{col_sequence[4].lower()}={mem_w} * {col_sequence[4]}",
+        f"({obj_w}                                                        + {col_w}) * dot(cur_clean_color, {col_sequence[0]}) --> seen_{col_sequence[0].lower()}={mem_w} * {col_sequence[0]}",
+        f"{obj_w} * dot(seen_{col_sequence[0].lower()}, {col_sequence[0]}) + {col_w} * dot(cur_clean_color, {col_sequence[1]}) --> seen_{col_sequence[1].lower()}={mem_w} * {col_sequence[1]}",
+        f"{obj_w} * dot(seen_{col_sequence[1].lower()}, {col_sequence[1]}) + {col_w} * dot(cur_clean_color, {col_sequence[2]}) --> seen_{col_sequence[2].lower()}={mem_w} * {col_sequence[2]}",
+        f"{obj_w} * dot(seen_{col_sequence[2].lower()}, {col_sequence[2]}) + {col_w} * dot(cur_clean_color, {col_sequence[3]}) --> seen_{col_sequence[3].lower()}={mem_w} * {col_sequence[3]}",
+        f"{obj_w} * dot(seen_{col_sequence[3].lower()}, {col_sequence[3]}) + {col_w} * dot(cur_clean_color, {col_sequence[4]}) --> seen_{col_sequence[4].lower()}={mem_w} * {col_sequence[4]}",
         "0.8 --> ",
     )
     
-    color_recognition_actions = spa.Actions(
-        "dot(spa_red, RED) - 0.05*(dot(spa_green, GREEN) - dot(spa_blue, BLUE)) --> color=RED",
-        "dot(spa_blue, BLUE) - 0.05*(dot(spa_green, GREEN) - dot(spa_red, RED)) --> color=BLUE",
-        "dot(spa_green, GREEN) - 0.05*(dot(spa_red, RED) - dot(spa_blue, BLUE)) --> color=GREEN",
-        "0.95*(dot(spa_red, RED) + dot(spa_green, GREEN)) - dot(spa_blue, BLUE) --> color=YELLOW",
-        "0.95*(dot(spa_red, RED) + dot(spa_blue, BLUE)) - dot(spa_green, GREEN) --> color=MAGENTA",
-        "0.8 --> color=0",
+    cur_color_recognition_actions = spa.Actions(
+        "dot(cur_red, RED) - 0.05*(dot(cur_green, GREEN) - dot(cur_blue, BLUE)) --> cur_color=RED",
+        "dot(cur_blue, BLUE) - 0.05*(dot(cur_green, GREEN) - dot(cur_red, RED)) --> cur_color=BLUE",
+        "dot(cur_green, GREEN) - 0.05*(dot(cur_red, RED) - dot(cur_blue, BLUE)) --> cur_color=GREEN",
+        "0.95*(dot(cur_red, RED) + dot(cur_green, GREEN)) - dot(cur_blue, BLUE) --> cur_color=YELLOW",
+        "0.95*(dot(cur_red, RED) + dot(cur_blue, BLUE)) - dot(cur_green, GREEN) --> cur_color=MAGENTA",
+        "0.8 --> cur_color=0",
+    )
+
+    next_color_recognition_actions = spa.Actions(
+        "dot(next_red, RED) - 0.05*(dot(next_green, GREEN) - dot(next_blue, BLUE)) --> next_color=RED",
+        "dot(next_blue, BLUE) - 0.05*(dot(next_green, GREEN) - dot(next_red, RED)) --> next_color=BLUE",
+        "dot(next_green, GREEN) - 0.05*(dot(next_red, RED) - dot(next_blue, BLUE)) --> next_color=GREEN",
+        "0.95*(dot(next_red, RED) + dot(next_green, GREEN)) - dot(next_blue, BLUE) --> next_color=YELLOW",
+        "0.95*(dot(next_red, RED) + dot(next_blue, BLUE)) - dot(next_green, GREEN) --> next_color=MAGENTA",
+        "0.8 --> next_color=0",
     )
     
-    model.clean_color = spa.AssociativeMemory(input_vocab=col_vocab,
-                                              wta_output=True)
+    model.cur_clean_color = spa.AssociativeMemory(input_vocab=col_vocab,
+                                                  wta_output=True)
     # Elongate the color signal with a weak feedback connection
-    nengo.Connection(model.clean_color.am.output, model.clean_color.am.input, transform=0.5)
+    nengo.Connection(model.cur_clean_color.am.output, model.cur_clean_color.am.input, transform=0.5)
     
-    model.col_reg_bg = spa.BasalGanglia(color_recognition_actions)
-    model.col_reg_thalamus = spa.Thalamus(model.col_reg_bg)
+    model.next_clean_color = spa.AssociativeMemory(input_vocab=col_vocab,
+                                                   wta_output=True)
+    nengo.Connection(model.next_clean_color.am.output, model.next_clean_color.am.input, transform=0.5)
+    
+    model.cur_col_reg_bg = spa.BasalGanglia(cur_color_recognition_actions)
+    model.cur_col_reg_thalamus = spa.Thalamus(model.cur_col_reg_bg)
+
+    model.next_col_reg_bg = spa.BasalGanglia(next_color_recognition_actions)
+    model.next_col_reg_thalamus = spa.Thalamus(model.next_col_reg_bg)
     
     model.col_mem_bg = spa.BasalGanglia(color_memory_actions)
     model.col_mem_thalamus = spa.Thalamus(model.col_mem_bg)
 
-    cleanup_action = spa.Actions(
-        "clean_color = color",
+    cleanup_actions = spa.Actions(
+        "cur_clean_color = cur_color",
+        "next_clean_color = next_color",
     )
     
-    model.cortical = spa.Cortical(cleanup_action)
+    model.cortical = spa.Cortical(cleanup_actions)
 
 
  
