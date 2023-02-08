@@ -158,7 +158,7 @@ with model:
     
     ### Agent functionality - your code adds to this section ###################
     N = 500
-    D = 32
+    D = 64
     
     #All input nodes should feed into one ensemble. Here is how to do this for
     #the radar, see if you can do it for the others
@@ -176,7 +176,7 @@ with model:
     #the movement function is only driven by information from the radar, so we
     #can connect the radar ensemble to the output node with this function 
     #directly. In the assignment, you will need intermediate steps
-    nengo.Connection(walldist, movement, function=movement_func)
+    # nengo.Connection(walldist, movement, function=movement_func)
     
     # Try to create an extra identity connection (this greatly changes the behaviour)
     # Potentially troublesome for basing my decisions on multiple factors later
@@ -278,48 +278,54 @@ with model:
     model.col_mem_bg = spa.BasalGanglia(color_memory_actions)
     model.col_mem_thalamus = spa.Thalamus(model.col_mem_bg)
 
-    cleanup_actions = spa.Actions(
-        "cur_clean_color = cur_color",
-        "next_clean_color = next_color",
-    )
-    
-    model.cortical = spa.Cortical(cleanup_actions)
-
-    model.illegal_move_ahead = spa.State(D)
+    model.illegal_move_ahead = spa.State(D, vocab=answer_vocab)
     obj_w = 0.8
     col_w = 0.4
     move_actions = spa.Actions(
-        f"{obj_w} * dot(next_clean_color, RED) + {col_w} * dot(seen_red, YES) - {col_w} * dot(cur_clean_color, RED) --> illegal_move_ahead=TRUE",
-        f"{obj_w} * dot(next_clean_color, BLUE) + {col_w} * dot(seen_blue, YES) - {col_w} * dot(cur_clean_color, BLUE) --> illegal_move_ahead=TRUE",
-        f"{obj_w} * dot(next_clean_color, GREEN) + {col_w} * dot(seen_green, YES) - {col_w} * dot(cur_clean_color, GREEN) --> illegal_move_ahead=TRUE",
-        f"{obj_w} * dot(next_clean_color, YELLOW) + {col_w} * dot(seen_yellow, YES) - {col_w} * dot(cur_clean_color, YELLOW) --> illegal_move_ahead=TRUE",
-        f"{obj_w} * dot(next_clean_color, MAGENTA) + {col_w} * dot(seen_magenta, YES) - {col_w} * dot(cur_clean_color, MAGENTA) --> illegal_move_ahead=TRUE",
-        "0.8 --> illegal_move_ahead=FALSE",
+        f"{obj_w} * dot(next_clean_color, RED) + {col_w} * dot(seen_red, YES) - {col_w} * dot(cur_clean_color, RED) --> illegal_move_ahead=YES",
+        f"{obj_w} * dot(next_clean_color, BLUE) + {col_w} * dot(seen_blue, YES) - {col_w} * dot(cur_clean_color, BLUE) --> illegal_move_ahead=YES",
+        f"{obj_w} * dot(next_clean_color, GREEN) + {col_w} * dot(seen_green, YES) - {col_w} * dot(cur_clean_color, GREEN) --> illegal_move_ahead=YES",
+        f"{obj_w} * dot(next_clean_color, YELLOW) + {col_w} * dot(seen_yellow, YES) - {col_w} * dot(cur_clean_color, YELLOW) --> illegal_move_ahead=YES",
+        f"{obj_w} * dot(next_clean_color, MAGENTA) + {col_w} * dot(seen_magenta, YES) - {col_w} * dot(cur_clean_color, MAGENTA) --> illegal_move_ahead=YES",
+        "0.8 --> illegal_move_ahead=NO",
     )
     model.move_bg = spa.BasalGanglia(move_actions)
     model.move_thalamus = spa.Thalamus(model.move_bg)
 
+    mapping_actions = spa.Actions(
+        "cur_clean_color = cur_color",
+        "next_clean_color = next_color",
+    )
+
+    model.cortical = spa.Cortical(mapping_actions)
+
     def avoid_func(x):
         return sum(x)
-    avoid_ens = nengo.Ensemble(n_neurons=N, dimensions=D, radius=1)
-    nengo.Connection(model.illegal_move_ahead.output, avoid_ens)
-    avoid_transform_ens = nengo.Ensemble(n_neurons=N, dimensions=4, radius=4)
-    nengo.Connection(avoid_ens, avoid_transform_ens[0], function=lambda x: sum(x))
-    nengo.Connection(walldist, avoid_transform_ens[1:])
+    avoid_answer_pointer = nengo.Ensemble(n_neurons=N, dimensions=D, radius=1)
+    nengo.Connection(model.illegal_move_ahead.output, avoid_answer_pointer)
+    avoid_answer = nengo.Ensemble(n_neurons=N*4, dimensions=1, radius=1)
+    nengo.Connection(avoid_answer_pointer, avoid_answer, function=lambda x: answer_vocab.parse("YES").compare(x))
     def avoid(x):
-        if x[0] < -0.5 or x[0] > 0.5:
+        return [0, -(x[1] * 0.5), 0]
+    def treshold(x):
+        if x[0] < 0.2:
             x1 = x[1]
-            x2 = x[2] - 1
+            x2 = x[2]
             x3 = x[3]
-
-            return [x1, x2, x3]
         else:
-            return [0, 0, 0]
-    course_adjust = nengo.Ensemble(n_neurons=N, dimensions=3, radius=4)
-    nengo.Connection(avoid_transform_ens, course_adjust, function=avoid)
-    nengo.Connection(course_adjust, movement, function=movement_func)
+            x1 = 0
+            x2 = 0
+            x3 = 0
 
-    nengo.Connection(walldist, course_adjust)
+        return [x1, x2, x3]
+    avoid_course = nengo.Ensemble(n_neurons=N, dimensions=4, radius=4)
+    nengo.Connection(avoid_answer, avoid_course[0])
+    nengo.Connection(walldist, avoid_course[1:], function=avoid)
+    adjusted_course = nengo.Ensemble(n_neurons=N, dimensions=3, radius=4)
+    # nengo.Connection(avoid_course, adjusted_course, function=treshold)
+
+    nengo.Connection(walldist, adjusted_course)
+    nengo.Connection(adjusted_course, movement, function=movement_func)
 
 
  
