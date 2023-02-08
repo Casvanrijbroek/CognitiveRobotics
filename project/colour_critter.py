@@ -196,6 +196,8 @@ with model:
     rgb_vocab.parse("BLUE+GREEN+RED")
     col_vocab = spa.Vocabulary(D)
     col_vocab.parse("BLUE+GREEN+RED+MAGENTA+YELLOW")
+    answer_vocab = spa.Vocabulary(D)
+    answer_vocab.parse("YES+NO")
     
     model.cur_color = spa.State(D, vocab=col_vocab)
         
@@ -221,22 +223,22 @@ with model:
     nengo.Connection(next_col_ens[2], model.next_blue.input,
                      transform=rgb_vocab["BLUE"].v.reshape(D, 1))
         
-    model.seen_red = spa.State(D, vocab=col_vocab, feedback=1)
-    model.seen_blue = spa.State(D, vocab=col_vocab, feedback=1)
-    model.seen_green = spa.State(D, vocab=col_vocab, feedback=1)
-    model.seen_yellow = spa.State(D, vocab=col_vocab, feedback=1)
-    model.seen_magenta = spa.State(D, vocab=col_vocab, feedback=1)
+    model.seen_red = spa.State(D, vocab=answer_vocab, feedback=1)
+    model.seen_blue = spa.State(D, vocab=answer_vocab, feedback=1)
+    model.seen_green = spa.State(D, vocab=answer_vocab, feedback=1)
+    model.seen_yellow = spa.State(D, vocab=answer_vocab, feedback=1)
+    model.seen_magenta = spa.State(D, vocab=answer_vocab, feedback=1)
     
     col_sequence = ["MAGENTA", "BLUE", "YELLOW", "GREEN", "RED"]
     obj_w = 0.4
     col_w = 0.8
     mem_w = 2
     color_memory_actions = spa.Actions(
-        f"({obj_w}                                                        + {col_w}) * dot(cur_clean_color, {col_sequence[0]}) --> seen_{col_sequence[0].lower()}={mem_w} * {col_sequence[0]}",
-        f"{obj_w} * dot(seen_{col_sequence[0].lower()}, {col_sequence[0]}) + {col_w} * dot(cur_clean_color, {col_sequence[1]}) --> seen_{col_sequence[1].lower()}={mem_w} * {col_sequence[1]}",
-        f"{obj_w} * dot(seen_{col_sequence[1].lower()}, {col_sequence[1]}) + {col_w} * dot(cur_clean_color, {col_sequence[2]}) --> seen_{col_sequence[2].lower()}={mem_w} * {col_sequence[2]}",
-        f"{obj_w} * dot(seen_{col_sequence[2].lower()}, {col_sequence[2]}) + {col_w} * dot(cur_clean_color, {col_sequence[3]}) --> seen_{col_sequence[3].lower()}={mem_w} * {col_sequence[3]}",
-        f"{obj_w} * dot(seen_{col_sequence[3].lower()}, {col_sequence[3]}) + {col_w} * dot(cur_clean_color, {col_sequence[4]}) --> seen_{col_sequence[4].lower()}={mem_w} * {col_sequence[4]}",
+        f"({obj_w}                                                        + {col_w}) * dot(cur_clean_color, {col_sequence[0]}) --> seen_{col_sequence[0].lower()}={mem_w} * YES - NO",
+        f"{obj_w} * dot(seen_{col_sequence[0].lower()}, YES) + {col_w} * dot(cur_clean_color, {col_sequence[1]}) --> seen_{col_sequence[1].lower()}={mem_w} * YES - NO",
+        f"{obj_w} * dot(seen_{col_sequence[1].lower()}, YES) + {col_w} * dot(cur_clean_color, {col_sequence[2]}) --> seen_{col_sequence[2].lower()}={mem_w} * YES - NO",
+        f"{obj_w} * dot(seen_{col_sequence[2].lower()}, YES) + {col_w} * dot(cur_clean_color, {col_sequence[3]}) --> seen_{col_sequence[3].lower()}={mem_w} * YES - NO",
+        f"{obj_w} * dot(seen_{col_sequence[3].lower()}, YES) + {col_w} * dot(cur_clean_color, {col_sequence[4]}) --> seen_{col_sequence[4].lower()}={mem_w} * YES - NO",
         "0.8 --> ",
     )
     
@@ -287,15 +289,23 @@ with model:
     obj_w = 0.8
     col_w = 0.4
     move_actions = spa.Actions(
-        f"{obj_w} * dot(next_clean_color, RED) + {col_w} * dot(seen_red, RED) - {col_w} * dot(cur_clean_color, RED) --> illegal_move_ahead=TRUE",
-        f"{obj_w} * dot(next_clean_color, BLUE) + {col_w} * dot(seen_blue, BLUE) - {col_w} * dot(cur_clean_color, BLUE) --> illegal_move_ahead=TRUE",
-        f"{obj_w} * dot(next_clean_color, GREEN) + {col_w} * dot(seen_green, GREEN) - {col_w} * dot(cur_clean_color, GREEN) --> illegal_move_ahead=TRUE",
-        f"{obj_w} * dot(next_clean_color, YELLOW) + {col_w} * dot(seen_yellow, YELLOW) - {col_w} * dot(cur_clean_color, YELLOW) --> illegal_move_ahead=TRUE",
-        f"{obj_w} * dot(next_clean_color, MAGENTA) + {col_w} * dot(seen_magenta, MAGENTA) - {col_w} * dot(cur_clean_color, MAGENTA) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, RED) + {col_w} * dot(seen_red, YES) - {col_w} * dot(cur_clean_color, RED) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, BLUE) + {col_w} * dot(seen_blue, YES) - {col_w} * dot(cur_clean_color, BLUE) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, GREEN) + {col_w} * dot(seen_green, YES) - {col_w} * dot(cur_clean_color, GREEN) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, YELLOW) + {col_w} * dot(seen_yellow, YES) - {col_w} * dot(cur_clean_color, YELLOW) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, MAGENTA) + {col_w} * dot(seen_magenta, YES) - {col_w} * dot(cur_clean_color, MAGENTA) --> illegal_move_ahead=TRUE",
         "0.8 --> illegal_move_ahead=FALSE",
     )
     model.move_bg = spa.BasalGanglia(move_actions)
     model.move_thalamus = spa.Thalamus(model.move_bg)
+
+    model.test = spa.State(D)
+    explore_actions = spa.Actions(
+        "dot(illegal_move_ahead, TRUE) --> test=WORKING",
+        "0.8 --> test=0",
+    )
+    model.explore_bg = spa.BasalGanglia(explore_actions)
+    model.explore_thalamus = spa.Thalamus(model.explore_bg)
 
 
  
