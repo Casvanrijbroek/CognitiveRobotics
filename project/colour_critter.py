@@ -299,13 +299,27 @@ with model:
     model.move_bg = spa.BasalGanglia(move_actions)
     model.move_thalamus = spa.Thalamus(model.move_bg)
 
-    model.test = spa.State(D)
-    explore_actions = spa.Actions(
-        "dot(illegal_move_ahead, TRUE) --> test=WORKING",
-        "0.8 --> test=0",
-    )
-    model.explore_bg = spa.BasalGanglia(explore_actions)
-    model.explore_thalamus = spa.Thalamus(model.explore_bg)
+    def avoid_func(x):
+        return sum(x)
+    avoid_ens = nengo.Ensemble(n_neurons=N, dimensions=D, radius=1)
+    nengo.Connection(model.illegal_move_ahead.output, avoid_ens)
+    avoid_transform_ens = nengo.Ensemble(n_neurons=N, dimensions=4, radius=4)
+    nengo.Connection(avoid_ens, avoid_transform_ens[0], function=lambda x: sum(x))
+    nengo.Connection(walldist, avoid_transform_ens[1:])
+    def avoid(x):
+        if x[0] < -0.5 or x[0] > 0.5:
+            x1 = x[1]
+            x2 = x[2] - 1
+            x3 = x[3]
+
+            return [x1, x2, x3]
+        else:
+            return [0, 0, 0]
+    course_adjust = nengo.Ensemble(n_neurons=N, dimensions=3, radius=4)
+    nengo.Connection(avoid_transform_ens, course_adjust, function=avoid)
+    nengo.Connection(course_adjust, movement, function=movement_func)
+
+    nengo.Connection(walldist, course_adjust)
 
 
  
