@@ -158,7 +158,7 @@ with model:
     
     ### Agent functionality - your code adds to this section ###################
     N = 500
-    D = 64
+    D = 32
     
     #All input nodes should feed into one ensemble. Here is how to do this for
     #the radar, see if you can do it for the others
@@ -265,7 +265,7 @@ with model:
     
     model.next_clean_color = spa.AssociativeMemory(input_vocab=col_vocab,
                                                    wta_output=True)
-    nengo.Connection(model.next_clean_color.am.output, model.next_clean_color.am.input, transform=0.5)
+    # nengo.Connection(model.next_clean_color.am.output, model.next_clean_color.am.input, transform=0.5)
     
     model.cur_col_reg_bg = spa.BasalGanglia(cur_color_recognition_actions)
     model.cur_col_reg_thalamus = spa.Thalamus(model.cur_col_reg_bg)
@@ -282,6 +282,20 @@ with model:
     )
     
     model.cortical = spa.Cortical(cleanup_actions)
+
+    model.illegal_move_ahead = spa.State(D)
+    obj_w = 0.8
+    col_w = 0.4
+    move_actions = spa.Actions(
+        f"{obj_w} * dot(next_clean_color, RED) + {col_w} * dot(seen_red, RED) - {col_w} * dot(cur_clean_color, RED) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, BLUE) + {col_w} * dot(seen_blue, BLUE) - {col_w} * dot(cur_clean_color, BLUE) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, GREEN) + {col_w} * dot(seen_green, GREEN) - {col_w} * dot(cur_clean_color, GREEN) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, YELLOW) + {col_w} * dot(seen_yellow, YELLOW) - {col_w} * dot(cur_clean_color, YELLOW) --> illegal_move_ahead=TRUE",
+        f"{obj_w} * dot(next_clean_color, MAGENTA) + {col_w} * dot(seen_magenta, MAGENTA) - {col_w} * dot(cur_clean_color, MAGENTA) --> illegal_move_ahead=TRUE",
+        "0.8 --> illegal_move_ahead=FALSE",
+    )
+    model.move_bg = spa.BasalGanglia(move_actions)
+    model.move_thalamus = spa.Thalamus(model.move_bg)
 
 
  
