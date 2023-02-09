@@ -19,12 +19,12 @@ mymap="""
 mymap="""
 ##########
 #R      Y#
-# ## ### #
-# ## ### #
-# ## ### #
-# ## ### #
-# ## ### #
-#M   B  G#
+# # #### #
+# #    # #
+# #### # #
+#     G# #
+#M###### #
+#       B#
 ##########
 """
 
@@ -82,7 +82,7 @@ col_values = {
     5: [0.8, 0.8, 0.2], # Yellow
 }
 
-noise_val = 0.01 # how much noise there will be in the colour info
+noise_val = 0.1 # how much noise there will be in the colour info
 
 #You do not have to use spa.SPA; you can also do this entirely with nengo.Network()
 model = spa.SPA()
@@ -157,8 +157,8 @@ with model:
     ahead_color = nengo.Node(look_ahead)    
     
     ### Agent functionality - your code adds to this section ###################
-    N = 500
-    D = 64
+    N = 1024
+    D = 128
     
     #All input nodes should feed into one ensemble. Here is how to do this for
     #the radar, see if you can do it for the others
@@ -267,7 +267,7 @@ with model:
     
     model.next_clean_color = spa.AssociativeMemory(input_vocab=col_vocab,
                                                    wta_output=True)
-    # nengo.Connection(model.next_clean_color.am.output, model.next_clean_color.am.input, transform=0.5)
+    # nengo.Connection(model.next_clean_color.am.output, model.next_clean_color.am.input, transform=0.1)
     
     model.cur_col_reg_bg = spa.BasalGanglia(cur_color_recognition_actions)
     model.cur_col_reg_thalamus = spa.Thalamus(model.cur_col_reg_bg)
@@ -303,29 +303,52 @@ with model:
         return sum(x)
     avoid_answer_pointer = nengo.Ensemble(n_neurons=N, dimensions=D, radius=1)
     nengo.Connection(model.illegal_move_ahead.output, avoid_answer_pointer)
-    avoid_answer = nengo.Ensemble(n_neurons=N*4, dimensions=1, radius=1)
-    nengo.Connection(avoid_answer_pointer, avoid_answer, function=lambda x: answer_vocab.parse("YES").compare(x))
-    def avoid(x):
-        return [0, -(x[1] * 0.5), 0]
-    def treshold(x):
-        if x[0] < 0.2:
-            x1 = x[1]
-            x2 = x[2]
-            x3 = x[3]
-        else:
-            x1 = 0
-            x2 = 0
-            x3 = 0
+    avoid_answer = nengo.Ensemble(n_neurons=N, dimensions=1, radius=0.9)
+    nengo.Connection(avoid_answer_pointer, avoid_answer, function=lambda x: (answer_vocab.parse("YES").compare(x) * 2) - 0.1)
 
-        return [x1, x2, x3]
+    # turn_w = 1
+    # slow_w = 0.5
+
+    # def avoid(x):
+    #     return [(x[0] * turn_w), -(x[1] * slow_w), (x[1] * turn_w)]
+
+    def product(x):
+        return x[0] * x[1]
+
+    def minimum(x):
+        if x < 0:
+            return 0
+        else:
+            return x
+
+    turn_w = nengo.Node(output=1)
+    slow_w = nengo.Node(output=-0.5)
+    avoid_weights = nengo.Ensemble(n_neurons=N, dimensions=2, radius=2)
+    nengo.Connection(turn_w, avoid_weights[0])
+    nengo.Connection(slow_w, avoid_weights[1])
+
+    avoid_left = nengo.Ensemble(n_neurons=N, dimensions=2, radius=4)
+    avoid_right = nengo.Ensemble(n_neurons=N, dimensions=2, radius=4)
+    avoid_speed = nengo.Ensemble(n_neurons=N, dimensions=2, radius=4)
+    nengo.Connection(avoid_weights[0], avoid_left[0])
+    nengo.Connection(walldist[0], avoid_left[1])
+    nengo.Connection(avoid_weights[0], avoid_right[0])
+    nengo.Connection(walldist[2], avoid_right[1])
+    nengo.Connection(avoid_weights[1], avoid_speed[0])
+    nengo.Connection(walldist[1], avoid_speed[1])
+
     avoid_course = nengo.Ensemble(n_neurons=N, dimensions=4, radius=4)
-    nengo.Connection(avoid_answer, avoid_course[0])
-    nengo.Connection(walldist, avoid_course[1:], function=avoid)
+    nengo.Connection(avoid_answer, avoid_course[0], function=minimum)
+    # nengo.Connection(walldist, avoid_course[1:], function=avoid)
+    nengo.Connection(avoid_left, avoid_course[1], function=product)
+    nengo.Connection(avoid_right, avoid_course[3], function=product)
+    nengo.Connection(avoid_speed, avoid_course[2], function=product)
+
+    def product_course(x):
+        return x[0] * x[1], x[0] * x[2], x[0] * x[3]
+
     adjusted_course = nengo.Ensemble(n_neurons=N, dimensions=3, radius=4)
-    # nengo.Connection(avoid_course, adjusted_course, function=treshold)
+    nengo.Connection(avoid_course, adjusted_course, function=product_course)
 
     nengo.Connection(walldist, adjusted_course)
     nengo.Connection(adjusted_course, movement, function=movement_func)
-
-
- 
