@@ -6,17 +6,6 @@ import numpy as np
 
 #we can change the map here using # for walls and RGBMY for various colours
 mymap="""
-#########
-#R     Y#
-# ##### #
-# ##### #
-# ##### #
-# ##### #
-# ##### #
-#M  G  B#
-#########
-"""
-mymap="""
 ##########
 #R      Y#
 # # #### #
@@ -158,8 +147,8 @@ with model:
     
     ### Agent functionality - your code adds to this section ###################
     N = 1024
-    D = 128
-    
+    D = 256
+
     #All input nodes should feed into one ensemble. Here is how to do this for
     #the radar, see if you can do it for the others
     walldist = nengo.Ensemble(n_neurons=N, dimensions=3, radius=4)
@@ -178,29 +167,22 @@ with model:
     #directly. In the assignment, you will need intermediate steps
     # nengo.Connection(walldist, movement, function=movement_func)
     
-    # Try to create an extra identity connection (this greatly changes the behaviour)
-    # Potentially troublesome for basing my decisions on multiple factors later
-    # I should find a way to stabilize this
-    #choose_movement = nengo.Ensemble(n_neurons=500, dimensions=3, radius=4)
-    #nengo.Connection(walldist, choose_movement)
-    #nengo.Connection(choose_movement, movement, function=movement_func)
-    
-    # Simple ensemble to represent the observed color
+    # Simple ensemble to represent the observed color both current and ahead
     cur_col_ens = nengo.Ensemble(n_neurons=N, dimensions=3, radius=1.5)
     nengo.Connection(current_color, cur_col_ens)
-    
+
     next_col_ens = nengo.Ensemble(n_neurons=N, dimensions=3, radius=1.5)
     nengo.Connection(ahead_color, next_col_ens)
-    
+
+    # Define vocabularies for later use
     rgb_vocab = spa.Vocabulary(D)
     rgb_vocab.parse("BLUE+GREEN+RED")
     col_vocab = spa.Vocabulary(D)
     col_vocab.parse("BLUE+GREEN+RED+MAGENTA+YELLOW")
     answer_vocab = spa.Vocabulary(D)
     answer_vocab.parse("YES+NO")
-    
-    model.cur_color = spa.State(D, vocab=col_vocab)
-        
+
+    # Create states to store semantic pointers for RGB values
     model.cur_red = spa.State(D, vocab=rgb_vocab)
     nengo.Connection(cur_col_ens[0], model.cur_red.input,
                      transform=rgb_vocab["RED"].v.reshape(D, 1))
@@ -211,8 +193,6 @@ with model:
     nengo.Connection(cur_col_ens[2], model.cur_blue.input,
                      transform=rgb_vocab["BLUE"].v.reshape(D, 1))
 
-    model.next_color = spa.State(D, vocab=col_vocab)
-
     model.next_red = spa.State(D, vocab=rgb_vocab)
     nengo.Connection(next_col_ens[0], model.next_red.input,
                      transform=rgb_vocab["RED"].v.reshape(D, 1))
@@ -222,14 +202,22 @@ with model:
     model.next_blue = spa.State(D, vocab=rgb_vocab)
     nengo.Connection(next_col_ens[2], model.next_blue.input,
                      transform=rgb_vocab["BLUE"].v.reshape(D, 1))
-        
+
+    # These states represent the final colours
+    model.cur_color = spa.State(D, vocab=col_vocab)
+    model.next_color = spa.State(D, vocab=col_vocab)
+
+    # Create memory states for the remembrance of visited colours
     model.seen_red = spa.State(D, vocab=answer_vocab, feedback=1)
     model.seen_blue = spa.State(D, vocab=answer_vocab, feedback=1)
     model.seen_green = spa.State(D, vocab=answer_vocab, feedback=1)
     model.seen_yellow = spa.State(D, vocab=answer_vocab, feedback=1)
     model.seen_magenta = spa.State(D, vocab=answer_vocab, feedback=1)
-    
+
+    # Define the colour sequence
     col_sequence = ["MAGENTA", "BLUE", "YELLOW", "GREEN", "RED"]
+
+    # Basal ganglia rules for the memory of visited colours
     obj_w = 0.4
     col_w = 0.8
     mem_w = 2
@@ -241,7 +229,8 @@ with model:
         f"{obj_w} * dot(seen_{col_sequence[3].lower()}, YES) + {col_w} * dot(cur_clean_color, {col_sequence[4]}) --> seen_{col_sequence[4].lower()}={mem_w} * YES - NO",
         "0.8 --> ",
     )
-    
+
+    # Basal ganglia rules for detecting the current colour
     cur_color_recognition_actions = spa.Actions(
         "dot(cur_red, RED) - 0.05*(dot(cur_green, GREEN) - dot(cur_blue, BLUE)) --> cur_color=RED",
         "dot(cur_blue, BLUE) - 0.05*(dot(cur_green, GREEN) - dot(cur_red, RED)) --> cur_color=BLUE",
@@ -251,6 +240,7 @@ with model:
         "0.8 --> cur_color=0",
     )
 
+    # Basal ganglia rules for detecting the next colour
     next_color_recognition_actions = spa.Actions(
         "dot(next_red, RED) - 0.05*(dot(next_green, GREEN) - dot(next_blue, BLUE)) --> next_color=RED",
         "dot(next_blue, BLUE) - 0.05*(dot(next_green, GREEN) - dot(next_red, RED)) --> next_color=BLUE",
@@ -259,25 +249,16 @@ with model:
         "0.95*(dot(next_red, RED) + dot(next_blue, BLUE)) - dot(next_green, GREEN) --> next_color=MAGENTA",
         "0.8 --> next_color=0",
     )
-    
+
+    # Cleanup memory for the colour detections
     model.cur_clean_color = spa.AssociativeMemory(input_vocab=col_vocab,
                                                   wta_output=True)
     # Elongate the color signal with a weak feedback connection
     nengo.Connection(model.cur_clean_color.am.output, model.cur_clean_color.am.input, transform=0.5)
-    
     model.next_clean_color = spa.AssociativeMemory(input_vocab=col_vocab,
                                                    wta_output=True)
-    # nengo.Connection(model.next_clean_color.am.output, model.next_clean_color.am.input, transform=0.1)
-    
-    model.cur_col_reg_bg = spa.BasalGanglia(cur_color_recognition_actions)
-    model.cur_col_reg_thalamus = spa.Thalamus(model.cur_col_reg_bg)
 
-    model.next_col_reg_bg = spa.BasalGanglia(next_color_recognition_actions)
-    model.next_col_reg_thalamus = spa.Thalamus(model.next_col_reg_bg)
-    
-    model.col_mem_bg = spa.BasalGanglia(color_memory_actions)
-    model.col_mem_thalamus = spa.Thalamus(model.col_mem_bg)
-
+    # Basal ganglia rules for detecting whether there's an already visited colour ahead
     model.illegal_move_ahead = spa.State(D, vocab=answer_vocab)
     obj_w = 0.8
     col_w = 0.4
@@ -289,44 +270,56 @@ with model:
         f"{obj_w} * dot(next_clean_color, MAGENTA) + {col_w} * dot(seen_magenta, YES) - {col_w} * dot(cur_clean_color, MAGENTA) --> illegal_move_ahead=YES",
         "0.8 --> illegal_move_ahead=NO",
     )
+
+    # Initiate basal ganglia's and thalamus' for the defined rules
+    model.cur_col_reg_bg = spa.BasalGanglia(cur_color_recognition_actions)
+    model.cur_col_reg_thalamus = spa.Thalamus(model.cur_col_reg_bg)
+
+    model.next_col_reg_bg = spa.BasalGanglia(next_color_recognition_actions)
+    model.next_col_reg_thalamus = spa.Thalamus(model.next_col_reg_bg)
+
+    model.col_mem_bg = spa.BasalGanglia(color_memory_actions)
+    model.col_mem_thalamus = spa.Thalamus(model.col_mem_bg)
+
     model.move_bg = spa.BasalGanglia(move_actions)
     model.move_thalamus = spa.Thalamus(model.move_bg)
 
+    # Actions to send colours to clean-up memory
     mapping_actions = spa.Actions(
         "cur_clean_color = cur_color",
         "next_clean_color = next_color",
     )
 
+    # Initiate cortical for cleanup connections
     model.cortical = spa.Cortical(mapping_actions)
 
-    def avoid_func(x):
-        return sum(x)
+    # Ensemble to encode semantic pointer from the illegal move detector
     avoid_answer_pointer = nengo.Ensemble(n_neurons=N, dimensions=D, radius=1)
     nengo.Connection(model.illegal_move_ahead.output, avoid_answer_pointer)
+
+    # Ensemble to map the illegal move semantic pointer to a value up to 1 based on its similarity to YES
     avoid_answer = nengo.Ensemble(n_neurons=N, dimensions=1, radius=0.9)
     nengo.Connection(avoid_answer_pointer, avoid_answer, function=lambda x: (answer_vocab.parse("YES").compare(x) * 2) - 0.1)
 
-    # turn_w = 1
-    # slow_w = 0.5
-
-    # def avoid(x):
-    #     return [(x[0] * turn_w), -(x[1] * slow_w), (x[1] * turn_w)]
-
+    # Ensemble function that multiplies two dimensions
     def product(x):
         return x[0] * x[1]
 
+    # Ensemble function that clips the value to 0 if it is lower than 0
     def minimum(x):
         if x < 0:
             return 0
         else:
             return x
 
-    turn_w = nengo.Node(output=1)
+    # Weight priors for the modification of the wall distance (double the sides, halve the front)
+    turn_w = nengo.Node(output=1.2)
     slow_w = nengo.Node(output=-0.5)
     avoid_weights = nengo.Ensemble(n_neurons=N, dimensions=2, radius=2)
     nengo.Connection(turn_w, avoid_weights[0])
     nengo.Connection(slow_w, avoid_weights[1])
 
+    # Ensembles to store wall distance and multiplication weights together
     avoid_left = nengo.Ensemble(n_neurons=N, dimensions=2, radius=4)
     avoid_right = nengo.Ensemble(n_neurons=N, dimensions=2, radius=4)
     avoid_speed = nengo.Ensemble(n_neurons=N, dimensions=2, radius=4)
@@ -337,18 +330,24 @@ with model:
     nengo.Connection(avoid_weights[1], avoid_speed[0])
     nengo.Connection(walldist[1], avoid_speed[1])
 
+    # Multiplies the wall distances together with their weights and stores them in an ensemble
+    # together with the avoid signal
     avoid_course = nengo.Ensemble(n_neurons=N, dimensions=4, radius=4)
     nengo.Connection(avoid_answer, avoid_course[0], function=minimum)
-    # nengo.Connection(walldist, avoid_course[1:], function=avoid)
     nengo.Connection(avoid_left, avoid_course[1], function=product)
     nengo.Connection(avoid_right, avoid_course[3], function=product)
     nengo.Connection(avoid_speed, avoid_course[2], function=product)
 
+    # Ensemble function that combines the avoid signal with the adjusted wall distances
     def product_course(x):
         return x[0] * x[1], x[0] * x[2], x[0] * x[3]
 
+    # Ensemble that encodes the adjusted wall distances, these are the normal distances
+    # if there's not visited colour ahead, and the adjusted distances if there is a
+    # visited colour ahead
     adjusted_course = nengo.Ensemble(n_neurons=N, dimensions=3, radius=4)
     nengo.Connection(avoid_course, adjusted_course, function=product_course)
 
+    # Map the (adjusted) wall distances to the movement node using the provided movement function
     nengo.Connection(walldist, adjusted_course)
     nengo.Connection(adjusted_course, movement, function=movement_func)
